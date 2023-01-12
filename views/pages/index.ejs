@@ -8,6 +8,7 @@
     <title>Websockets</title>
 
     <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/normalizr@3.6.2/dist/normalizr.browser.min.js"></script>
 
     <!-- Bootstrap -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
@@ -65,7 +66,12 @@
     <div class="container-chat">
         <form class="form align-items-start col-12" onsubmit="return sendMessage()">
             <div class="col-12">
-                <input class="col-8" type="text" name="email" id="email" placeholder="Email"></span>
+                <input class="col-8" type="text" name="email" id="email" placeholder="Email">
+                <input class="col-8" type="text" name="nombre" id="nombre" placeholder="Nombre">
+                <input class="col-8" type="text" name="apellido" id="apellido" placeholder="Apellido">
+                <input class="col-8" type="number" name="edad" id="edad" placeholder="Edad">
+                <input class="col-8" type="text" name="alias" id="alias" placeholder="Alias">
+                <input class="col-8" type="text" name="avatar" id="avatar" placeholder="URL Avatar">
             </div>
             <hr class="col-12">
             <div id="mensajes">
@@ -110,11 +116,26 @@
             }
         });
 
-        socket.on('mensajes', messages => {
+        socket.on('mensajes', mensajesNormalizados => {
+            console.log(mensajesNormalizados);
+
+            //Normalizr
+            const denormalize = normalizr.denormalize;
+            const schema = normalizr.schema;
+
+            //Esquemas normalizacion
+            const author = new schema.Entity('authors', {}, { idAttribute: 'email' });
+            const message = new schema.Entity('messages', { author: author }, { idAttribute: 'id' });
+            const mensajeria = new schema.Entity('mensajeria', { messages: [message] }, { idAttribute: 'id' });
+
+            const mensajesDenormalizados = denormalize(mensajesNormalizados.result, mensajeria, mensajesNormalizados.entities);
+
+            console.log(mensajesDenormalizados);
+
             let divMensajes = document.getElementById('mensajes');
             divMensajes.innerHTML = "";
-            for (let i = 0; i < messages.length; i++) {
-                let divMessageHtml = `<div><span class="text-primary">${messages[i].email} </span><span class="text-danger">${messages[i].date}: </span><span>${messages[i].text}</span></div>`;
+            for (let i = 0; i < mensajesDenormalizados.messages.length; i++) {
+                let divMessageHtml = `<div><span class="text-primary">${mensajesDenormalizados.messages[i].author.email} </span><span class="text-danger">${mensajesDenormalizados.messages[i].date}: </span><span>${mensajesDenormalizados.messages[i].text}</span></div>`;
                 divMensajes.innerHTML = divMensajes.outerHTML + divMessageHtml;
             }
         })
@@ -148,8 +169,15 @@
                 let seconds = today.getSeconds();
 
                 const message = {
+                    author: {
+                        email: document.getElementById('email').value,
+                        nombre: document.getElementById('nombre').value,
+                        apellido: document.getElementById('apellido').value,
+                        edad: document.getElementById('edad').value,
+                        alias: document.getElementById('alias').value,
+                        avatar: document.getElementById('avatar').value
+                    },
                     text: document.getElementById('message').value,
-                    email: document.getElementById('email').value,
                     date: `[${dd}/${mm}/${yyyy} ${hours}:${minutes}:${seconds}]`
                 }
 
