@@ -5,9 +5,41 @@ const { Server: HttpServer } = require('http');
 const { Server: IOServer } = require('socket.io');
 const ClienteSQL = require('./db/sqlContainer').ClienteSQL;
 const optionsMariaDB = require('./options/mysqlconn').options;
-const optionsSQLite = require('./options/sqlite3conn').options;
+
+//MongoDB
+const mongoose = require('mongoose');
+const mongoConfig = require('./options/mongodbconn').options;
+const modelMensaje = require('./models/mensaje');
 
 
+//Normalizr
+const normalizr = require('normalizr');
+const util = require('util');
+
+const normalize = normalizr.normalize;
+const schema = normalizr.schema;
+
+//Esquemas normalizacion
+const author = new schema.Entity('authors', {}, { idAttribute: 'email' });
+const message = new schema.Entity('messages', { author: author }, { idAttribute: 'id' });
+const mensajeria = new schema.Entity('mensajeria', { messages: [message] }, { idAttribute: 'id' });
+
+
+//Métodos
+function print(objeto) {
+    console.log(util.inspect(objeto, false, 12, true));
+}
+
+function convertirArray(array) {
+    let nuevoArray = [];
+    for (mensaje of array) {
+        nuevoArray.push({ id: mensaje._id.toString(), author: mensaje.author, text: mensaje.text, date: mensaje.date });
+    };
+    return nuevoArray;
+}
+
+
+//Inicio de servidor
 const app = express();
 const httpServer = new HttpServer(app);
 const io = new IOServer(httpServer);
@@ -16,10 +48,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 let sqlProductos = new ClienteSQL(optionsMariaDB, "productos");
-let sqlMensajes = new ClienteSQL(optionsSQLite, "mensajes");
 
-sqlProductos.crearTablaProductos();
-sqlMensajes.crearTablaMensajes();
 
 //Ejs
 app.set('view engine', 'ejs');
@@ -29,6 +58,10 @@ app.get("/", (req, res) => {
     res.render("pages/index");
 });
 
+app.get("/api/productos-test", (req, res) => {
+    res.render("pages/testView");
+})
+
 //Websocket
 io.on('connection', function (socket) {
     console.log("Cliente conectado");
@@ -37,9 +70,20 @@ io.on('connection', function (socket) {
     sqlProductos.obtenerProductos()
         .then(productos => socket.emit('productos', productos));
 
-    sqlMensajes = new ClienteSQL(optionsSQLite, "mensajes");
-    sqlMensajes.obtenerMensajes()
-        .then(mensajes => io.sockets.emit('mensajes', mensajes));
+    mongoose.set('strictQuery', true);
+    mongoose.connect("mongodb://localhost:27017/mensajeria", mongoConfig)
+        .then(() => modelMensaje.find({}))
+        .then(data => {
+            const chat = {
+                id: "mensajes",
+                messages: convertirArray(data)
+            };
+            const mensajesNormalizados = normalize(chat, mensajeria);
+            print(mensajesNormalizados);
+            io.sockets.emit('mensajes', mensajesNormalizados);
+        })
+        .catch((err) => console.log(err));
+
 
 
     socket.on("nuevo-producto", producto => {
@@ -50,10 +94,21 @@ io.on('connection', function (socket) {
     });
 
     socket.on("nuevo-mensaje", message => {
-        sqlMensajes = new ClienteSQL(optionsSQLite, "mensajes");
-        sqlMensajes.insertarElemento(message)
-            .then(() => sqlMensajes.obtenerMensajes())
-            .then(mensajes => io.sockets.emit('mensajes', mensajes));
+        mongoose.set('strictQuery', true);
+        mongoose.connect("mongodb://localhost:27017/mensajeria", mongoConfig)
+            .then(() => modelMensaje.create(message))
+            .then(() => console.log("Mensaje guardado"))
+            .then(() => modelMensaje.find({}))
+            .then(data => {
+                const chat = {
+                    id: "mensajes",
+                    messages: convertirArray(data)
+                };
+                const mensajesNormalizados = normalize(chat, mensajeria);
+                print(mensajesNormalizados);
+                io.sockets.emit('mensajes', mensajesNormalizados);
+            })
+            .catch((err) => console.log(err));
     })
 });
 
