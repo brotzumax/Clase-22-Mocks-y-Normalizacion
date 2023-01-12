@@ -29,6 +29,10 @@
             width: 35%;
         }
 
+        #porcentajeCompresion {
+            color: blue;
+        }
+
         form {
             margin: 20px;
             display: inline-flex;
@@ -62,7 +66,7 @@
     <div id="productos">
     </div>
 
-    <h2>Centro de mensajes</h2>
+    <h2>Centro de mensajes <span id="porcentajeCompresion"></span> </h2>
     <div class="container-chat">
         <form class="form align-items-start col-12" onsubmit="return sendMessage()">
             <div class="col-12">
@@ -138,6 +142,10 @@
                 let divMessageHtml = `<div><span class="text-primary">${mensajesDenormalizados.messages[i].author.email} </span><span class="text-danger">${mensajesDenormalizados.messages[i].date}: </span><span>${mensajesDenormalizados.messages[i].text}</span></div>`;
                 divMensajes.innerHTML = divMensajes.outerHTML + divMessageHtml;
             }
+
+            let compresion = (100 - (JSON.stringify(mensajesDenormalizados).length * 100 / JSON.stringify(mensajesNormalizados).length));
+            let spanCompresion = document.getElementById('porcentajeCompresion');
+            spanCompresion.innerHTML = `Compresión: ${compresion}%`;
         })
 
         function addProduct() {
